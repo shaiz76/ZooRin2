@@ -75,6 +75,63 @@ async function fetchUSDKRW() {
   }
 }
 
+// ── Yahoo Finance (Korean stocks) ─────────────────────────────────────────────
+let _yfAuth = null;
+
+async function getYFAuth() {
+  if (_yfAuth && Date.now() - _yfAuth.ts < 3_600_000) return _yfAuth;
+
+  const ua = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+  const cookies = new Map();
+
+  // Follow fc.yahoo.com redirects manually to collect cookies
+  let url = 'https://fc.yahoo.com';
+  for (let i = 0; i < 6; i++) {
+    const r = await fetch(url, {
+      headers: { 'User-Agent': ua, Cookie: [...cookies.entries()].map(([k,v]) => `${k}=${v}`).join('; ') },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(8000),
+    });
+    (r.headers.getSetCookie?.() ?? []).forEach(c => {
+      const [pair] = c.split(';');
+      const eq = pair.indexOf('=');
+      if (eq > 0) cookies.set(pair.slice(0, eq).trim(), pair.slice(eq + 1).trim());
+    });
+    if (r.status >= 300 && r.status < 400) {
+      const loc = r.headers.get('location') ?? '';
+      url = loc.startsWith('http') ? loc : new URL(loc, 'https://fc.yahoo.com').href;
+    } else break;
+  }
+
+  const cookieStr = [...cookies.entries()].map(([k,v]) => `${k}=${v}`).join('; ');
+  const crumbRes = await fetch('https://query1.finance.yahoo.com/v1/test/solr', {
+    headers: { 'User-Agent': ua, Cookie: cookieStr },
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!crumbRes.ok) return null;
+  const crumb = (await crumbRes.text()).trim();
+
+  _yfAuth = { crumb, cookieStr, ua, ts: Date.now() };
+  return _yfAuth;
+}
+
+async function fetchYFQuotes(symbols) {
+  try {
+    const auth = await getYFAuth();
+    if (!auth) return [];
+    const url = `https://query2.finance.yahoo.com/v7/finance/quote?crumb=${encodeURIComponent(auth.crumb)}&symbols=${symbols.join(',')}`;
+    const res = await fetch(url, {
+      headers: { 'User-Agent': auth.ua, Cookie: auth.cookieStr },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.quoteResponse?.result ?? [];
+  } catch {
+    return [];
+  }
+}
+
 // ── handler ───────────────────────────────────────────────────────────────────
 export async function GET() {
   if (!FH_KEY) {
@@ -109,9 +166,25 @@ export async function GET() {
     }).filter(Boolean);
     offset += US_STOCK_CONFIG.length;
 
-    const krStocks = KR_STOCK_CONFIG.map((c, i) => {
-      const q = quotes[offset + i];
-      return q ? { symbol: c.fh, name: c.name, color: c.color, category: c.category, initial: c.initial, ticker: `${c.code} · ${c.sub}`, marketCap: '-', isKR: true, ...q } : null;
+    // Korean stocks via Yahoo Finance
+    const yfSymbols = KR_STOCK_CONFIG.map(c => `${c.code}.KS`);
+    const yfResults = await fetchYFQuotes(yfSymbols);
+    const yfMap = {};
+    yfResults.forEach(r => { if (r?.symbol) yfMap[r.symbol] = r; });
+
+    const krStocks = KR_STOCK_CONFIG.map(c => {
+      const yf = yfMap[`${c.code}.KS`];
+      if (!yf || !yf.regularMarketPrice) return null;
+      return {
+        symbol: c.code,
+        name: c.name, color: c.color, category: c.category, initial: c.initial,
+        ticker: `${c.code} · ${c.sub}`,
+        price: yf.regularMarketPrice,
+        change: yf.regularMarketChange ?? 0,
+        changePercent: yf.regularMarketChangePercent ?? 0,
+        marketCap: yf.marketCap ? `${Math.round(yf.marketCap / 1e12)}조` : '-',
+        isKR: true,
+      };
     }).filter(Boolean);
     offset += KR_STOCK_CONFIG.length;
 
