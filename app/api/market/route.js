@@ -7,11 +7,15 @@ const FH_BASE = 'https://finnhub.io/api/v1';
 
 // ── symbol config ─────────────────────────────────────────────────────────────
 const INDEX_CONFIG = [
-  { fh: '^GSPC',  symbol: '^GSPC',   name: 'S&P 500',   flag: '🇺🇸', sub: '미국 500대 기업' },
-  { fh: '^IXIC',  symbol: '^IXIC',   name: 'NASDAQ',    flag: '🇺🇸', sub: '기술주 중심' },
-  { fh: '^DJI',   symbol: '^DJI',    name: 'DOW JONES', flag: '🇺🇸', sub: '미국 30대 우량주' },
-  { fh: 'KS:^KOSPI', symbol: '^KS11', name: 'KOSPI',   flag: '🇰🇷', sub: '한국 코스피' },
-  { fh: 'KQ:^KOSDAQ', symbol: '^KQ11', name: 'KOSDAQ', flag: '🇰🇷', sub: '한국 코스닥' },
+  { fh: '^GSPC', symbol: '^GSPC', name: 'S&P 500',   flag: '🇺🇸', sub: '미국 500대 기업' },
+  { fh: '^IXIC', symbol: '^IXIC', name: 'NASDAQ',    flag: '🇺🇸', sub: '기술주 중심' },
+  { fh: '^DJI',  symbol: '^DJI',  name: 'DOW JONES', flag: '🇺🇸', sub: '미국 30대 우량주' },
+];
+
+// Korean indices via Naver
+const KR_INDEX_CONFIG = [
+  { naver: 'KOSPI',  symbol: '^KS11', name: 'KOSPI',  flag: '🇰🇷', sub: '한국 코스피' },
+  { naver: 'KOSDAQ', symbol: '^KQ11', name: 'KOSDAQ', flag: '🇰🇷', sub: '한국 코스닥' },
 ];
 
 const US_STOCK_CONFIG = [
@@ -75,60 +79,57 @@ async function fetchUSDKRW() {
   }
 }
 
-// ── Yahoo Finance (Korean stocks) ─────────────────────────────────────────────
-let _yfAuth = null;
+// ── Naver Finance (Korean stocks & indices) ───────────────────────────────────
+const NAVER_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
+  'Referer': 'https://m.stock.naver.com/',
+};
 
-async function getYFAuth() {
-  if (_yfAuth && Date.now() - _yfAuth.ts < 3_600_000) return _yfAuth;
-
-  const ua = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
-  const cookies = new Map();
-
-  // Follow fc.yahoo.com redirects manually to collect cookies
-  let url = 'https://fc.yahoo.com';
-  for (let i = 0; i < 6; i++) {
-    const r = await fetch(url, {
-      headers: { 'User-Agent': ua, Cookie: [...cookies.entries()].map(([k,v]) => `${k}=${v}`).join('; ') },
-      redirect: 'manual',
-      signal: AbortSignal.timeout(8000),
-    });
-    (r.headers.getSetCookie?.() ?? []).forEach(c => {
-      const [pair] = c.split(';');
-      const eq = pair.indexOf('=');
-      if (eq > 0) cookies.set(pair.slice(0, eq).trim(), pair.slice(eq + 1).trim());
-    });
-    if (r.status >= 300 && r.status < 400) {
-      const loc = r.headers.get('location') ?? '';
-      url = loc.startsWith('http') ? loc : new URL(loc, 'https://fc.yahoo.com').href;
-    } else break;
-  }
-
-  const cookieStr = [...cookies.entries()].map(([k,v]) => `${k}=${v}`).join('; ');
-  const crumbRes = await fetch('https://query1.finance.yahoo.com/v1/test/solr', {
-    headers: { 'User-Agent': ua, Cookie: cookieStr },
-    signal: AbortSignal.timeout(8000),
-  });
-  if (!crumbRes.ok) return null;
-  const crumb = (await crumbRes.text()).trim();
-
-  _yfAuth = { crumb, cookieStr, ua, ts: Date.now() };
-  return _yfAuth;
+function parseKRW(str) {
+  if (!str) return null;
+  return parseFloat(String(str).replace(/,/g, ''));
 }
 
-async function fetchYFQuotes(symbols) {
+async function fetchNaverStock(code) {
   try {
-    const auth = await getYFAuth();
-    if (!auth) return [];
-    const url = `https://query2.finance.yahoo.com/v7/finance/quote?crumb=${encodeURIComponent(auth.crumb)}&symbols=${symbols.join(',')}`;
-    const res = await fetch(url, {
-      headers: { 'User-Agent': auth.ua, Cookie: auth.cookieStr },
-      signal: AbortSignal.timeout(10000),
+    const res = await fetch(`https://m.stock.naver.com/api/stock/${code}/basic`, {
+      headers: NAVER_HEADERS, signal: AbortSignal.timeout(8000),
     });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return data.quoteResponse?.result ?? [];
+    if (!res.ok) return null;
+    const d = await res.json();
+    if (!d.closePrice) return null;
+    const price  = parseKRW(d.closePrice);
+    const change = parseKRW(d.compareToPreviousClosePrice);
+    const pct    = parseFloat(d.fluctuationsRatio);
+    const dir    = d.compareToPreviousPrice?.name;
+    return {
+      price,
+      change:        dir === 'FALLING' ? -(change ?? 0) : (change ?? 0),
+      changePercent: dir === 'FALLING' ? -(pct ?? 0)    : (pct ?? 0),
+    };
   } catch {
-    return [];
+    return null;
+  }
+}
+
+async function fetchNaverIndex(code) {
+  try {
+    const res = await fetch(`https://m.stock.naver.com/api/index/${code}/basic`, {
+      headers: NAVER_HEADERS, signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return null;
+    const d = await res.json();
+    const price  = parseKRW(d.closePrice);
+    const change = parseKRW(d.compareToPreviousClosePrice);
+    const pct    = parseFloat(d.fluctuationsRatio);
+    const dir    = d.compareToPreviousPrice?.name;
+    return {
+      price,
+      change:        dir === 'FALLING' ? -(change ?? 0) : (change ?? 0),
+      changePercent: dir === 'FALLING' ? -(pct ?? 0)    : (pct ?? 0),
+    };
+  } catch {
+    return null;
   }
 }
 
@@ -143,53 +144,62 @@ export async function GET() {
 
   try {
     // Fetch all in parallel
-    const allConfigs = [...INDEX_CONFIG, ...US_STOCK_CONFIG, ...KR_STOCK_CONFIG, ...SECTOR_CONFIG];
-    const [usdkrw, ...quotes] = await Promise.all([
+    const fhConfigs = [...INDEX_CONFIG, ...US_STOCK_CONFIG, ...SECTOR_CONFIG];
+    const [usdkrw, ...fhAndNaver] = await Promise.all([
       fetchUSDKRW(),
-      ...allConfigs.map(c => fhQuote(c.fh)),
+      ...fhConfigs.map(c => fhQuote(c.fh)),
+      ...KR_INDEX_CONFIG.map(c => fetchNaverIndex(c.naver)),
+      ...KR_STOCK_CONFIG.map(c => fetchNaverStock(c.code)),
     ]);
 
     let offset = 0;
 
-    const indices = [
-      ...INDEX_CONFIG.map((c, i) => {
-        const q = quotes[i];
-        return q ? { symbol: c.symbol, name: c.name, flag: c.flag, sub: c.sub, ...q } : null;
-      }).filter(Boolean),
-      usdkrw ? { symbol: 'USDKRW=X', name: 'USD/KRW', flag: '💱', sub: '원/달러 환율', ...usdkrw } : null,
-    ].filter(Boolean);
+    // US indices (Finnhub)
+    const usIndexQuotes = fhAndNaver.slice(offset, offset + INDEX_CONFIG.length);
     offset += INDEX_CONFIG.length;
 
-    const usStocks = US_STOCK_CONFIG.map((c, i) => {
-      const q = quotes[offset + i];
-      return q ? { symbol: c.fh, name: c.name, color: c.color, category: c.category, initial: c.initial, ticker: `${c.fh} · ${c.sub}`, marketCap: '-', ...q } : null;
-    }).filter(Boolean);
+    // US stocks (Finnhub)
+    const usStockQuotes = fhAndNaver.slice(offset, offset + US_STOCK_CONFIG.length);
     offset += US_STOCK_CONFIG.length;
 
-    // Korean stocks via Yahoo Finance
-    const yfSymbols = KR_STOCK_CONFIG.map(c => `${c.code}.KS`);
-    const yfResults = await fetchYFQuotes(yfSymbols);
-    const yfMap = {};
-    yfResults.forEach(r => { if (r?.symbol) yfMap[r.symbol] = r; });
+    // Sector ETFs (Finnhub)
+    const sectorQuotes = fhAndNaver.slice(offset, offset + SECTOR_CONFIG.length);
+    offset += SECTOR_CONFIG.length;
 
-    const krStocks = KR_STOCK_CONFIG.map(c => {
-      const yf = yfMap[`${c.code}.KS`];
-      if (!yf || !yf.regularMarketPrice) return null;
-      return {
-        symbol: c.code,
-        name: c.name, color: c.color, category: c.category, initial: c.initial,
-        ticker: `${c.code} · ${c.sub}`,
-        price: yf.regularMarketPrice,
-        change: yf.regularMarketChange ?? 0,
-        changePercent: yf.regularMarketChangePercent ?? 0,
-        marketCap: yf.marketCap ? `${Math.round(yf.marketCap / 1e12)}조` : '-',
-        isKR: true,
-      };
+    // Korean indices (Naver)
+    const krIndexQuotes = fhAndNaver.slice(offset, offset + KR_INDEX_CONFIG.length);
+    offset += KR_INDEX_CONFIG.length;
+
+    // Korean stocks (Naver)
+    const krStockQuotes = fhAndNaver.slice(offset, offset + KR_STOCK_CONFIG.length);
+
+    const indices = [
+      ...INDEX_CONFIG.map((c, i) => {
+        const q = usIndexQuotes[i];
+        return q ? { symbol: c.symbol, name: c.name, flag: c.flag, sub: c.sub, ...q } : null;
+      }),
+      ...KR_INDEX_CONFIG.map((c, i) => {
+        const q = krIndexQuotes[i];
+        return q ? { symbol: c.symbol, name: c.name, flag: c.flag, sub: c.sub, ...q } : null;
+      }),
+      usdkrw ? { symbol: 'USDKRW=X', name: 'USD/KRW', flag: '💱', sub: '원/달러 환율', ...usdkrw } : null,
+    ].filter(Boolean);
+
+    const usStocks = US_STOCK_CONFIG.map((c, i) => {
+      const q = usStockQuotes[i];
+      return q ? { symbol: c.fh, name: c.name, color: c.color, category: c.category, initial: c.initial, ticker: `${c.fh} · ${c.sub}`, marketCap: '-', ...q } : null;
     }).filter(Boolean);
-    offset += KR_STOCK_CONFIG.length;
+
+    const krStocks = KR_STOCK_CONFIG.map((c, i) => {
+      const q = krStockQuotes[i];
+      return q ? {
+        symbol: c.code, name: c.name, color: c.color, category: c.category, initial: c.initial,
+        ticker: `${c.code} · ${c.sub}`, marketCap: '-', isKR: true, ...q,
+      } : null;
+    }).filter(Boolean);
 
     const sectors = SECTOR_CONFIG.map((c, i) => {
-      const q = quotes[offset + i];
+      const q = sectorQuotes[i];
       return q ? { symbol: c.symbol, ...q } : null;
     }).filter(Boolean);
 
