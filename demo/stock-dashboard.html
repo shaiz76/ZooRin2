@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>주식 첫걸음 — 초보자 주식 대시보드</title>
+  <style>
+    /* ===== 리셋 & 기본 ===== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-base:       #0d0f14;
+      --bg-card:       #161a23;
+      --bg-card-hover: #1e2330;
+      --bg-tab:        #1a1f2c;
+      --border:        #262d3d;
+      --border-active: #3b5bdb;
+
+      --text-primary:   #e8eaf0;
+      --text-secondary: #8892a4;
+      --text-muted:     #545e72;
+
+      --up:    #26c17c;
+      --down:  #f04b4b;
+      --flat:  #8892a4;
+
+      --blue:   #3b5bdb;
+      --blue-light: #4c6ef5;
+
+      /* Fear & Greed 색상 */
+      --fg-extreme-fear:  #f04b4b;
+      --fg-fear:          #f47c3c;
+      --fg-neutral:       #f5c542;
+      --fg-greed:         #7bc67e;
+      --fg-extreme-greed: #26c17c;
+
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Pretendard', sans-serif;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      min-height: 100vh;
+      font-size: 16px;
+      line-height: 1.6;
+    }
+
+    /* ===== 레이아웃 ===== */
+    .container { max-width: 1280px; margin: 0 auto; padding: 0 24px; }
+
+    /* ===== 헤더 ===== */
+    .header {
+      border-bottom: 1px solid var(--border);
+      padding: 16px 0;
+      position: sticky;
+      top: 0;
+      background: rgba(13,15,20,0.92);
+      backdrop-filter: blur(12px);
+      z-index: 100;
+    }
+    .header-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-primary);
+      text-decoration: none;
+    }
+    .logo-icon {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--blue), #7c3aed);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+    .header-badge {
+      font-size: 12px;
+      background: rgba(59,91,219,0.2);
+      color: var(--blue-light);
+      border: 1px solid rgba(59,91,219,0.4);
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-weight: 600;
+    }
+    .last-updated {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* ===== 섹션 타이틀 ===== */
+    .section-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 12px;
+    }
+
+    /* ===== 메인 그리드 ===== */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 24px;
+      padding: 24px 0 48px;
+    }
+    .left-col { display: flex; flex-direction: column; gap: 24px; }
+    .right-col { display: flex; flex-direction: column; gap: 24px; }
+
+    /* ===== 지수 요약 카드 ===== */
+    .index-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+    .index-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      transition: border-color 150ms ease, background 150ms ease;
+    }
+    .index-card:hover { border-color: var(--border-active); background: var(--bg-card-hover); }
+    .index-card .label {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      margin-bottom: 8px;
+    }
+    .index-card .value {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--text-primary);
+      line-height: 1.2;
+    }
+    .index-card .change {
+      font-size: 14px;
+      font-weight: 600;
+      margin-top: 4px;
+    }
+    .index-card .sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+    .up   { color: var(--up); }
+    .down { color: var(--down); }
+    .flat { color: var(--flat); }
+
+    /* ===== 탭 ===== */
+    .tab-wrapper {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+    .tab-header {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-tab);
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 14px 20px;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      transition: color 150ms ease, background 150ms ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      position: relative;
+    }
+    .tab-btn:hover { color: var(--text-primary); background: rgba(255,255,255,0.03); }
+    .tab-btn.active {
+      color: var(--text-primary);
+      background: var(--bg-card);
+    }
+    .tab-btn.active::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 0; right: 0;
+      height: 2px;
+      background: var(--blue-light);
+      border-radius: 2px 2px 0 0;
+    }
+    .tab-flag { font-size: 18px; }
+    .tab-content { display: none; padding: 20px; }
+    .tab-content.active { display: block; }
+
+    /* ===== 종목 테이블 ===== */
+    .stock-section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .stock-category {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      padding: 4px 12px;
+      background: rgba(255,255,255,0.04);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 150ms;
+    }
+    .stock-category:hover, .stock-category.active {
+      background: rgba(59,91,219,0.2);
+      color: var(--blue-light);
+    }
+    .categories { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+
+    .stock-table { width: 100%; border-collapse: collapse; }
+    .stock-table thead th {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-weight: 600;
+      text-align: right;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .stock-table thead th:first-child { text-align: left; }
+    .stock-table tbody tr {
+      transition: background 120ms ease;
+      border-bottom: 1px solid rgba(38,45,61,0.6);
+    }
+    .stock-table tbody tr:last-child { border-bottom: none; }
+    .stock-table tbody tr:hover { background: rgba(255,255,255,0.03); }
+    .stock-table td {
+      padding: 12px 12px;
+      font-size: 14px;
+      text-align: right;
+      vertical-align: middle;
+    }
+    .stock-table td:first-child { text-align: left; }
+    .stock-name { font-weight: 600; color: var(--text-primary); }
+    .stock-ticker { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+    .stock-logo {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .stock-info { display: flex; align-items: center; gap: 10px; }
+    .change-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .change-badge.up   { background: rgba(38,193,124,0.12); color: var(--up); }
+    .change-badge.down { background: rgba(240,75,75,0.12);  color: var(--down); }
+    .change-badge.flat { background: rgba(136,146,164,0.12); color: var(--flat); }
+
+    /* ===== Fear & Greed ===== */
+    .fg-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+    }
+    .fg-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+    .fg-subtitle { font-size: 12px; color: var(--text-muted); margin-bottom: 20px; }
+
+    .fg-gauge-wrap { position: relative; width: 100%; margin-bottom: 16px; }
+    .fg-arc {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    .fg-score-display {
+      text-align: center;
+      margin-top: -8px;
+    }
+    .fg-score {
+      font-size: 48px;
+      font-weight: 800;
+      line-height: 1;
+    }
+    .fg-label {
+      font-size: 14px;
+      font-weight: 700;
+      margin-top: 4px;
+    }
+    .fg-desc { font-size: 12px; color: var(--text-muted); margin-top: 6px; line-height: 1.5; }
+
+    .fg-history {
+      margin-top: 16px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .fg-hist-item {
+      background: rgba(255,255,255,0.03);
+      border-radius: 8px;
+      padding: 8px;
+      text-align: center;
+    }
+    .fg-hist-label { font-size: 11px; color: var(--text-muted); }
+    .fg-hist-value { font-size: 18px; font-weight: 700; margin-top: 2px; }
+    .fg-hist-mood  { font-size: 11px; margin-top: 2px; }
+
+    /* ===== 환율 카드 ===== */
+    .fx-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+    }
+    .fx-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .fx-row:last-child { border-bottom: none; }
+    .fx-pair { font-size: 14px; font-weight: 600; }
+    .fx-rate { font-size: 18px; font-weight: 700; }
+    .fx-change { font-size: 12px; margin-top: 2px; }
+
+    /* ===== 섹터 히트맵 ===== */
+    .sector-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+    }
+    .sector-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 12px; }
+    .sector-item {
+      border-radius: 8px;
+      padding: 10px 12px;
+      cursor: default;
+      transition: opacity 150ms;
+    }
+    .sector-item:hover { opacity: 0.85; }
+    .sector-name { font-size: 12px; font-weight: 600; color: #fff; }
+    .sector-pct  { font-size: 16px; font-weight: 700; color: #fff; margin-top: 2px; }
+
+    /* ===== 뉴스 ===== */
+    .news-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+    .news-card-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .news-title { font-size: 15px; font-weight: 700; }
+    .news-more  { font-size: 12px; color: var(--blue-light); cursor: pointer; }
+    .news-item {
+      padding: 14px 20px;
+      border-bottom: 1px solid rgba(38,45,61,0.6);
+      cursor: pointer;
+      transition: background 120ms;
+    }
+    .news-item:last-child { border-bottom: none; }
+    .news-item:hover { background: rgba(255,255,255,0.03); }
+    .news-headline { font-size: 14px; font-weight: 500; color: var(--text-primary); line-height: 1.4; }
+    .news-meta { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+    .news-tag {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 4px;
+      margin-right: 6px;
+    }
+
+    /* ===== 용어 사전 ===== */
+    .glossary-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+    .glossary-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .glossary-header-title { font-size: 15px; font-weight: 700; }
+    .glossary-item {
+      padding: 14px 20px;
+      border-bottom: 1px solid rgba(38,45,61,0.6);
+      cursor: pointer;
+    }
+    .glossary-item:last-child { border-bottom: none; }
+    .glossary-item:hover .glossary-def { display: block; }
+    .glossary-term {
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .glossary-term-name { font-size: 14px; font-weight: 700; color: var(--blue-light); }
+    .glossary-term-eng  { font-size: 12px; color: var(--text-muted); }
+    .glossary-def {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-top: 6px;
+      line-height: 1.6;
+    }
+
+    /* ===== 투자 팁 ===== */
+    .tip-card {
+      background: linear-gradient(135deg, rgba(59,91,219,0.15), rgba(124,58,237,0.1));
+      border: 1px solid rgba(59,91,219,0.3);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+    }
+    .tip-icon { font-size: 24px; margin-bottom: 8px; }
+    .tip-heading { font-size: 14px; font-weight: 700; margin-bottom: 8px; }
+    .tip-text { font-size: 13px; color: var(--text-secondary); line-height: 1.7; }
+
+    /* ===== 반응형 ===== */
+    @media (max-width: 1024px) {
+      .main-grid { grid-template-columns: 1fr; }
+      .right-col { display: grid; grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 768px) {
+      .index-grid { grid-template-columns: repeat(2, 1fr); }
+      .right-col  { grid-template-columns: 1fr; }
+      .container  { padding: 0 16px; }
+    }
+    @media (max-width: 480px) {
+      .index-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ===== 스크롤바 ===== */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg-base); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* ===== 애니메이션 ===== */
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .fade-in { animation: fadeIn 0.3s ease forwards; }
+  </style>
+</head>
+<body>
+
+<!-- ===== 헤더 ===== -->
+<header class="header">
+  <div class="container">
+    <div class="header-inner">
+      <a class="logo" href="#">
+        <div class="logo-icon">📈</div>
+        주식 첫걸음
+      </a>
+      <span class="header-badge">초보자 가이드</span>
+      <span class="last-updated">🕐 마지막 업데이트: 2025.04.27 15:30 KST</span>
+    </div>
+  </div>
+</header>
+
+<!-- ===== 메인 ===== -->
+<main>
+  <div class="container">
+    <div class="main-grid">
+
+      <!-- ===== 왼쪽 컬럼 ===== -->
+      <div class="left-col">
+
+        <!-- 지수 요약 -->
+        <div>
+          <p class="section-title">📊 시장 지수</p>
+          <div class="index-grid">
+            <!-- 코스피 -->
+            <div class="index-card">
+              <div class="label">🇰🇷 KOSPI</div>
+              <div class="value">2,641.17</div>
+              <div class="change down">▼ 12.33 (−0.46%)</div>
+              <div class="sub">코스피 200 · 349.82</div>
+            </div>
+            <!-- 코스닥 -->
+            <div class="index-card">
+              <div class="label">🇰🇷 KOSDAQ</div>
+              <div class="value">862.45</div>
+              <div class="change up">▲ 5.21 (+0.61%)</div>
+              <div class="sub">기술·바이오 중심</div>
+            </div>
+            <!-- S&P 500 -->
+            <div class="index-card">
+              <div class="label">🇺🇸 S&P 500</div>
+              <div class="value">5,099.96</div>
+              <div class="change up">▲ 47.26 (+0.93%)</div>
+              <div class="sub">미국 500대 기업</div>
+            </div>
+            <!-- 나스닥 -->
+            <div class="index-card">
+              <div class="label">🇺🇸 NASDAQ</div>
+              <div class="value">15,927.90</div>
+              <div class="change up">▲ 183.02 (+1.16%)</div>
+              <div class="sub">기술주 중심</div>
+            </div>
+            <!-- 다우 -->
+            <div class="index-card">
+              <div class="label">🇺🇸 DOW JONES</div>
+              <div class="value">38,239.66</div>
+              <div class="change down">▼ 42.77 (−0.11%)</div>
+              <div class="sub">미국 30대 우량주</div>
+            </div>
+            <!-- 환율 미니 -->
+            <div class="index-card">
+              <div class="label">💱 USD/KRW</div>
+              <div class="value">1,374.50</div>
+              <div class="change down">▼ 3.20 (−0.23%)</div>
+              <div class="sub">원/달러 환율</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 종목 탭 -->
+        <div class="tab-wrapper">
+          <div class="tab-header">
+            <button class="tab-btn active" onclick="switchTab('us', this)">
+              <span class="tab-flag">🇺🇸</span> 미국 주식
+            </button>
+            <button class="tab-btn" onclick="switchTab('kr', this)">
+              <span class="tab-flag">🇰🇷</span> 한국 주식
+            </button>
+          </div>
+
+          <!-- 미국 주식 탭 -->
+          <div class="tab-content active" id="tab-us">
+            <div class="categories">
+              <span class="stock-category active" onclick="filterCategory(this, 'us-all')">전체</span>
+              <span class="stock-category" onclick="filterCategory(this, 'us-tech')">기술</span>
+              <span class="stock-category" onclick="filterCategory(this, 'us-etf')">ETF</span>
+              <span class="stock-category" onclick="filterCategory(this, 'us-finance')">금융</span>
+              <span class="stock-category" onclick="filterCategory(this, 'us-health')">헬스케어</span>
+            </div>
+
+            <table class="stock-table">
+              <thead>
+                <tr>
+                  <th>종목</th>
+                  <th>현재가</th>
+                  <th>등락</th>
+                  <th>등락률</th>
+                  <th>시가총액</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr data-cat="us-tech">
+                  <td><div class="stock-info"><div class="stock-logo" style="background:#1877f2">A</div><div><div class="stock-name">애플</div><div class="stock-ticker">AAPL · 기술</div></div></div></td>
+                  <td>$169.89</td>
+                  <td class="up">+$2.31</td>
+                  <td><span class="change-badge up">▲ +1.38%</span></td>
+                  <td>$2.63T</td>
+                </tr>
+                <tr data-cat="us-tech">
+                  <td><div class="stock-info"><div class="stock-logo" style="background:#0078d4">M</div><div><div class="stock-name">마이크로소프트</div><div class="stock-ticker">MSFT · 기술</div></div></div></td>
+                  <td>$415.52</td>
+                  <td class="up">+$6.14</td>
+                  <td><span class="change-badge up">▲ +1.50%</span></td>
+                  <td>$3.09T</td>
+                </tr>
+                <tr data-cat="us-tech">
+                  <td><div class="stock-info"><div class="stock-logo" style="background:#ea4335">G</div><div><div class="stock-name">구글 (알파벳)</div><div class="stock-ticker">GOOGL · 기술</div></div></div></td>
+                  <td>$176.33</td>
+                  <td class="up">+$1.20</td>
+                  <td><span class="change-badge up">▲ +0.69%</span></td>
+                  <td>$2.19T</td>
+                </tr>
+                <tr data-cat="us-tech">
+                  <td><div class="stock-info"><div class="stock-logo" style="background:#ff9900">A</div><div><div class="stock-name">아마존</div><div class="stock-ticker">AMZN · 기술</div></div></div></td>
+                  <td>$183.25</td>
+                  <td class="up">+$2.88</td>
+                  <td><span class="change-badge up">▲ +1.60%</span></td>
+                  <td>$1.92T</td>
+                </tr>
+                <tr data-cat="us-tech">
+                  <td><div class="stock-info"><div class="stock-logo" style="background:#76b900">N</div><div><div class="stock-name">엔비디아</div><div class="stock-ticker">NVDA · 반도체</div></div></div></td>
+                  <td>$859.05</td>
+                  <td class="up">+$24.50</td>
+                  <td><span class="change-badge up">▲ +2.94%</span></td>
+                  <td>$2.11T</td>
+                </tr>
+                <tr data-cat="us-tech">
+                  <td><div class="stock-info"><div class="stock-logo" style="background:#e00b20">T</div><div><div class="stock-name">테슬라</div><div class="stock-ticker">TSLA · 전기차</div></div></div></td>
+                  <td>$177.86</td>
+                  <td class="down">-$3.11</td>
+                  <td><span class="change-badge down">▼ -1.72%</span></td>
+                  <td>$567B</td>
+                </tr>
+                <tr data-cat="us-etf">
+                  <td><div class="stock-info"><div class="stock-logo" style="background:#3b5bdb">S</div><div><div class="stock-name">SPDR S&P500 ETF</div><div class="stock-ticker">SPY · ETF</div></div></div></td>
+                  <td>$509.02</td>
+                  <td class="up">+$4.72</td>
+                  <td><span class="change-badge up">▲ +0.94%</span></td>
+                  <td>$492B</td>
+                </tr>
+                <tr data-cat="us-etf">
+                  <td><div class="stock-info"><div class="stock-logo" style="background:#4c6ef5">Q</div><div><div class="stock-name">Invesco QQQ</div><div class="stock-ticker">QQQ · ETF</div></div></div></td>
+                  <td>$436.18</td>
+                  <td class="up">+$5.04</td>
+                  <td><span class="change-badge up">▲ +1.17%</span></td>
+                  <td>$210B</td>
+                </tr>
+                <tr data-cat="us-finance">
+                  <td><div class="stock-info"><div class="stock-logo" style="background:#1e6b9e">J</div><div><div class="stock-name">JPMorgan Chase</div><div class="stock-ticker">JPM · 금융</div></div></div></td>
+                  <td>$196.45</td>
+                  <td class="down">-$1.22</td>
+                  <td><span class="change-badge down">▼ -0.62%</span></td>
+                  <td>$567B</td>
+                </tr>
+                <tr data-cat="us-health">
+                  <td><div class="stock-info"><div class="stock-logo" style="background:#d32f2f">J</div><div><div class="stock-name">존슨앤존슨</div><div class="stock-ticker">JNJ · 헬스케어</div></div></div></td>
+                  <td>$148.33</td>
+                  <td class="flat">$0.00</td>
+                  <td><span class="change-badge flat">— 0.00%</span></td>
+                  <td>$356B</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- 한국 주식 탭 -->
+          <div class="tab-content" id="tab-kr">
+            <div class="categories">
+              <span class="stock-category active" onclick="filterCategory(this, 'kr-all')">전체</span>
+              <span class="stock-category" onclick="filterCategory(this, 'kr-semi')">반도체</span>
+              <span class="stock-category" onclick="filterCategory(this, 'kr-battery')">2차전지</span>
+              <span class="stock-category" onclick="filterCategory(this, 'kr-bio')">바이오</span>
+              <span class="stock-category" onclick="filterCategory(this, 'kr-finance')">금융</span>
+            </div>
+
+            <table class="stock-table">
+              <thead>
+                <tr>
+                  <th>종목</th>
+                  <th>현재가</th>
+                  <th>등락</th>
+                  <th>등락률</th>
+                  <th>시가총액</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr data-cat="kr-semi">
+                  <td><div class="stock-info"><div class="stock-logo" style="background:#1428a0">S</div><div><div class="stock-name">삼성전자</div><div class="stock-ticker">005930 · 반도체</div></div></div></td>
+                  <td>76,800원</td>
+                  <td class="up">+800</td>
+                  <td><span class="change-badge up">▲ +1.05%</span></td>
+                  <td>458조</td>
+                </tr>
+                <tr data-cat="kr-semi">
+                  <td><div class="stock-info"><div class="stock-logo" style="background:#0072b1">H</div><div><div class="stock-name">SK하이닉스</div><div class="stock-ticker">000660 · 반도체</div></div></div></td>
+                  <td>167,500원</td>
+                  <td class="up">+3,500</td>
+                  <td><span class="change-badge up">▲ +2.13%</span></td>
+                  <td>122조</td>
+                </tr>
+                <tr data-cat="kr-battery">
+                  <td><div class="stock-info"><div class="stock-logo" style="background:#e31937">L</div><div><div class="stock-name">LG에너지솔루션</div><div class="stock-ticker">373220 · 2차전지</div></div></div></td>
+                  <td>372,000원</td>
+                  <td class="down">-8,000</td>
+                  <td><span class="change-badge down">▼ -2.11%</span></td>
+                  <td>87조</td>
+                </tr>
+                <tr data-cat="kr-battery">
+                  <td><div class="stock-info"><div class="stock-logo" style="background:#00a0e9">S</div><div><div class="stock-name">삼성SDI</div><div class="stock-ticker">006400 · 2차전지</div></div></div></td>
+                  <td>316,500원</td>
+                  <td class="down">-4,500</td>
+                  <td><span class="change-badge down">▼ -1.40%</span></td>
+                  <td>22조</td>
+                </tr>
+                <tr data-cat="kr-semi">
+                  <td><div class="stock-info"><div class="stock-logo" style="background:#c00">K</div><div><div class="stock-name">카카오</div><div class="stock-ticker">035720 · IT</div></div></div></td>
+                  <td>44,550원</td>
+                  <td class="up">+450</td>
+                  <td><span class="change-badge up">▲ +1.02%</span></td>
+                  <td>19조</td>
+                </tr>
+                <tr data-cat="kr-semi">
+                  <td><div class="stock-info"><div class="stock-logo" style="background:#03c75a">N</div><div><div class="stock-name">NAVER</div><div class="stock-ticker">035420 · IT</div></div></div></td>
+                  <td>175,200원</td>
+                  <td class="up">+1,200</td>
+                  <td><span class="change-badge up">▲ +0.69%</span></td>
+                  <td>28조</td>
+                </tr>
+                <tr data-cat="kr-bio">
+                  <td><div class="stock-info"><div class="stock-logo" style="background:#8b5cf6">C</div><div><div class="stock-name">셀트리온</div><div class="stock-ticker">068270 · 바이오</div></div></div></td>
+                  <td>156,300원</td>
+                  <td class="down">-1,700</td>
+                  <td><span class="change-badge down">▼ -1.07%</span></td>
+                  <td>21조</td>
+                </tr>
+                <tr data-cat="kr-finance">
+                  <td><div class="stock-info"><div class="stock-logo" style="background:#004b93">K</div><div><div class="stock-name">KB금융</div><div class="stock-ticker">105560 · 금융</div></div></div></td>
+                  <td>68,200원</td>
+                  <td class="flat">0</td>
+                  <td><span class="change-badge flat">— 0.00%</span></td>
+                  <td>27조</td>
+                </tr>
+                <tr data-cat="kr-finance">
+                  <td><div class="stock-info"><div class="stock-logo" style="background:#f44336">H</div><div><div class="stock-name">현대차</div><div class="stock-ticker">005380 · 자동차</div></div></div></td>
+                  <td>225,000원</td>
+                  <td class="up">+3,500</td>
+                  <td><span class="change-badge up">▲ +1.58%</span></td>
+                  <td>48조</td>
+                </tr>
+                <tr data-cat="kr-finance">
+                  <td><div class="stock-info"><div class="stock-logo" style="background:#005bac">P</div><div><div class="stock-name">POSCO홀딩스</div><div class="stock-ticker">005490 · 철강</div></div></div></td>
+                  <td>341,500원</td>
+                  <td class="down">-3,000</td>
+                  <td><span class="change-badge down">▼ -0.87%</span></td>
+                  <td>29조</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 뉴스 -->
+        <div class="news-card fade-in">
+          <div class="news-card-header">
+            <span class="news-title">📰 주요 경제 뉴스</span>
+            <span class="news-more">더보기 →</span>
+          </div>
+          <div class="news-item">
+            <div class="news-headline"><span class="news-tag" style="background:rgba(59,91,219,0.2);color:#4c6ef5">미국</span>Fed, 5월 금리 동결 시사…"데이터 더 지켜봐야"</div>
+            <div class="news-meta">🕐 2시간 전 · 연합뉴스</div>
+          </div>
+          <div class="news-item">
+            <div class="news-headline"><span class="news-tag" style="background:rgba(38,193,124,0.15);color:#26c17c">기업</span>엔비디아, 블랙웰 칩 수요 폭발…2분기 가이던스 대폭 상향</div>
+            <div class="news-meta">🕐 3시간 전 · 블룸버그</div>
+          </div>
+          <div class="news-item">
+            <div class="news-headline"><span class="news-tag" style="background:rgba(240,75,75,0.15);color:#f04b4b">경고</span>중국발 공급망 불안…반도체 재고 우려 다시 부상</div>
+            <div class="news-meta">🕐 4시간 전 · 한국경제</div>
+          </div>
+          <div class="news-item">
+            <div class="news-headline"><span class="news-tag" style="background:rgba(245,197,66,0.15);color:#f5c542">한국</span>삼성전자 1분기 영업이익 6.6조…반도체 회복세 뚜렷</div>
+            <div class="news-meta">🕐 5시간 전 · 매일경제</div>
+          </div>
+          <div class="news-item">
+            <div class="news-headline"><span class="news-tag" style="background:rgba(59,91,219,0.2);color:#4c6ef5">글로벌</span>유가 하락세 지속…WTI 배럴당 $81.23</div>
+            <div class="news-meta">🕐 6시간 전 · 로이터</div>
+          </div>
+        </div>
+
+      </div><!-- /left-col -->
+
+      <!-- ===== 오른쪽 컬럼 ===== -->
+      <div class="right-col">
+
+        <!-- Fear & Greed Index -->
+        <div class="fg-card">
+          <div class="fg-title">😨 CNN Fear &amp; Greed Index</div>
+          <div class="fg-subtitle">시장의 심리 온도계 — 투자자들이 지금 얼마나 겁을 먹고 있나?</div>
+
+          <!-- 게이지 SVG -->
+          <div class="fg-gauge-wrap">
+            <svg class="fg-arc" viewBox="0 0 200 120" xmlns="http://www.w3.org/2000/svg">
+              <!-- 배경 아크 (회색) -->
+              <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#262d3d" stroke-width="16" stroke-linecap="round"/>
+              <!-- 색상 구간 -->
+              <path d="M 20 100 A 80 80 0 0 1 55 31" fill="none" stroke="#f04b4b" stroke-width="16" stroke-linecap="butt" opacity="0.8"/>
+              <path d="M 55 31 A 80 80 0 0 1 100 20" fill="none" stroke="#f47c3c" stroke-width="16" stroke-linecap="butt" opacity="0.8"/>
+              <path d="M 100 20 A 80 80 0 0 1 145 31" fill="none" stroke="#f5c542" stroke-width="16" stroke-linecap="butt" opacity="0.8"/>
+              <path d="M 145 31 A 80 80 0 0 1 180 100" fill="none" stroke="#26c17c" stroke-width="16" stroke-linecap="butt" opacity="0.8"/>
+              <!-- 바늘 (현재값 42 = Fear) -->
+              <line id="fg-needle"
+                x1="100" y1="100"
+                x2="33" y2="56"
+                stroke="#e8eaf0" stroke-width="3" stroke-linecap="round"
+                transform-origin="100 100"/>
+              <circle cx="100" cy="100" r="5" fill="#e8eaf0"/>
+              <!-- 레이블 -->
+              <text x="22" y="115" fill="#f04b4b" font-size="9" font-weight="700">공포</text>
+              <text x="87" y="14" fill="#f5c542" font-size="9" font-weight="700" text-anchor="middle">중립</text>
+              <text x="168" y="115" fill="#26c17c" font-size="9" font-weight="700" text-anchor="end">탐욕</text>
+            </svg>
+          </div>
+
+          <div class="fg-score-display">
+            <div class="fg-score" style="color: #f47c3c">42</div>
+            <div class="fg-label" style="color: #f47c3c">😟 공포 (Fear)</div>
+            <div class="fg-desc">투자자들이 불안해하고 있어요. 역사적으로 이 시점은 <strong>매수 기회</strong>가 되기도 합니다.</div>
+          </div>
+
+          <div class="fg-history">
+            <div class="fg-hist-item">
+              <div class="fg-hist-label">어제</div>
+              <div class="fg-hist-value" style="color:#f04b4b">38</div>
+              <div class="fg-hist-mood" style="color:#f04b4b">공포</div>
+            </div>
+            <div class="fg-hist-item">
+              <div class="fg-hist-label">1주일 전</div>
+              <div class="fg-hist-value" style="color:#f5c542">51</div>
+              <div class="fg-hist-mood" style="color:#f5c542">중립</div>
+            </div>
+            <div class="fg-hist-item">
+              <div class="fg-hist-label">1달 전</div>
+              <div class="fg-hist-value" style="color:#7bc67e">67</div>
+              <div class="fg-hist-mood" style="color:#7bc67e">탐욕</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 섹터 히트맵 -->
+        <div class="sector-card">
+          <p class="section-title">🏭 섹터별 현황 (미국)</p>
+          <div class="sector-grid">
+            <div class="sector-item" style="background: rgba(38,193,124,0.7)">
+              <div class="sector-name">기술 (Tech)</div>
+              <div class="sector-pct">+1.42%</div>
+            </div>
+            <div class="sector-item" style="background: rgba(38,193,124,0.5)">
+              <div class="sector-name">에너지</div>
+              <div class="sector-pct">+0.88%</div>
+            </div>
+            <div class="sector-item" style="background: rgba(38,193,124,0.3)">
+              <div class="sector-name">헬스케어</div>
+              <div class="sector-pct">+0.31%</div>
+            </div>
+            <div class="sector-item" style="background: rgba(38,193,124,0.2)">
+              <div class="sector-name">금융</div>
+              <div class="sector-pct">+0.15%</div>
+            </div>
+            <div class="sector-item" style="background: rgba(240,75,75,0.3)">
+              <div class="sector-name">소비재</div>
+              <div class="sector-pct">-0.44%</div>
+            </div>
+            <div class="sector-item" style="background: rgba(240,75,75,0.5)">
+              <div class="sector-name">유틸리티</div>
+              <div class="sector-pct">-0.72%</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 투자 팁 -->
+        <div class="tip-card">
+          <div class="tip-icon">💡</div>
+          <div class="tip-heading">오늘의 투자 원칙</div>
+          <div class="tip-text">"<strong>공포에 사고, 탐욕에 팔아라</strong>"<br><br>Fear &amp; Greed 지수가 낮을수록 시장은 과매도 상태일 수 있습니다. 단, 단기 타이밍보다 <strong>장기적 관점</strong>이 초보자에게 더 안전합니다.</div>
+        </div>
+
+        <!-- 용어 사전 -->
+        <div class="glossary-card">
+          <div class="glossary-header">
+            <span>📖</span>
+            <span class="glossary-header-title">초보자 용어 사전</span>
+          </div>
+          <div class="glossary-item">
+            <div class="glossary-term">
+              <span class="glossary-term-name">PER</span>
+              <span class="glossary-term-eng">Price-to-Earnings Ratio</span>
+            </div>
+            <div class="glossary-def">주가를 주당순이익(EPS)으로 나눈 값. "이 회사의 수익 대비 주가가 비싼가?"를 판단하는 지표. 낮을수록 저평가된 것으로 볼 수 있지만, 업종마다 다릅니다.</div>
+          </div>
+          <div class="glossary-item">
+            <div class="glossary-term">
+              <span class="glossary-term-name">시가총액</span>
+              <span class="glossary-term-eng">Market Cap</span>
+            </div>
+            <div class="glossary-def">현재 주가 × 발행 주식 수. 회사의 전체 가치를 나타냅니다. 삼성전자 시총 ≈ 삼성전자를 통째로 사는 데 드는 돈.</div>
+          </div>
+          <div class="glossary-item">
+            <div class="glossary-term">
+              <span class="glossary-term-name">배당수익률</span>
+              <span class="glossary-term-eng">Dividend Yield</span>
+            </div>
+            <div class="glossary-def">1년간 받는 배당금 ÷ 주가 × 100%. 주식을 보유하는 것만으로 받는 "이자" 같은 개념입니다.</div>
+          </div>
+          <div class="glossary-item">
+            <div class="glossary-term">
+              <span class="glossary-term-name">ETF</span>
+              <span class="glossary-term-eng">Exchange Traded Fund</span>
+            </div>
+            <div class="glossary-def">여러 주식을 묶어 하나의 종목처럼 거래하는 펀드. SPY 하나 사면 S&P500 500개 기업에 분산투자하는 효과. 초보자에게 강력 추천!</div>
+          </div>
+          <div class="glossary-item">
+            <div class="glossary-term">
+              <span class="glossary-term-name">52주 고/저가</span>
+              <span class="glossary-term-eng">52-Week High / Low</span>
+            </div>
+            <div class="glossary-def">최근 1년간 주가의 최고점과 최저점. 현재 주가가 이 범위 어디에 있는지로 현재 가격의 상대적 위치를 파악합니다.</div>
+          </div>
+        </div>
+
+      </div><!-- /right-col -->
+    </div><!-- /main-grid -->
+  </div><!-- /container -->
+</main>
+
+<!-- ===== 푸터 ===== -->
+<footer style="border-top:1px solid var(--border); padding:24px 0; margin-top:8px;">
+  <div class="container">
+    <p style="font-size:12px; color:var(--text-muted); text-align:center; line-height:1.8;">
+      ⚠️ 이 사이트는 <strong>교육 목적</strong>으로 제작된 샘플 데이터입니다. 실제 투자 판단에 사용하지 마세요.<br>
+      실제 투자 전 반드시 공인된 금융기관 및 투자 전문가와 상담하세요.
+    </p>
+  </div>
+</footer>
+
+<script>
+  // ===== 탭 전환 =====
+  function switchTab(tab, btn) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + tab).classList.add('active');
+  }
+
+  // ===== 카테고리 필터 =====
+  function filterCategory(el, cat) {
+    // 버튼 활성화
+    el.closest('.categories').querySelectorAll('.stock-category').forEach(b => b.classList.remove('active'));
+    el.classList.add('active');
+
+    // 행 필터
+    const prefix = cat.split('-')[0]; // 'us' 또는 'kr'
+    const rows = document.querySelectorAll('#tab-' + prefix + ' tbody tr');
+    rows.forEach(row => {
+      if (cat.endsWith('-all') || row.dataset.cat === cat) {
+        row.style.display = '';
+      } else {
+        row.style.display = 'none';
+      }
+    });
+  }
+
+  // ===== 용어 토글 =====
+  document.querySelectorAll('.glossary-item').forEach(item => {
+    const def = item.querySelector('.glossary-def');
+    item.addEventListener('click', () => {
+      const isOpen = def.style.display === 'block';
+      // 전체 닫기
+      document.querySelectorAll('.glossary-def').forEach(d => d.style.display = 'none');
+      if (!isOpen) def.style.display = 'block';
+    });
+  });
+
+  // 초기에 첫 번째 용어 열어두기
+  const firstDef = document.querySelector('.glossary-def');
+  if (firstDef) firstDef.style.display = 'block';
+</script>
+
+</body>
+</html>
